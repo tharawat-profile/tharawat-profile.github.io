@@ -202,11 +202,13 @@ img{display:block}
     var k = Math.min(w / 1920, h / 1080);
     if (w < 900) k = w / 1920;
     slots.forEach(function (s) {
-      if (s.firstChild.classList.contains('gatep') && w >= 900) {
-        // the language gateway fills the whole screen (cover), centred, no side bars
+      if (s.firstChild.classList.contains('gatep')) {
+        // the language gateway fills the whole screen on every device (cover), centred, no side bars;
+        // on narrow screens its content is scaled so the logo and both buttons stay fully visible
         var c = Math.max(w / 1920, h / 1080);
         s.style.width = w + 'px'; s.style.height = h + 'px';
         s.firstChild.style.transform = 'translate(' + (w - 1920 * c) / 2 + 'px,' + (h - 1080 * c) / 2 + 'px) scale(' + c + ')';
+        var g = s.firstChild.querySelector('.gate'); if (g) g.style.transform = 'scale(' + Math.min(1, (w / c) / 800) + ')';
         return;
       }
       s.style.width = 1920 * k + 'px'; s.style.height = 1080 * k + 'px';
@@ -217,10 +219,30 @@ img{display:block}
   window.addEventListener('load', fit); setTimeout(fit, 400); setTimeout(fit, 1500);
   if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
 
+  // always open on the first page, unless the link itself points to a page (#id)
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (x) {}
+  if (!location.hash) { window.scrollTo(0, 0); window.addEventListener('load', function () { window.scrollTo(0, 0); }); }
+  else { var tgt0 = document.getElementById(location.hash.slice(1));
+         if (tgt0) window.addEventListener('load', function () { (tgt0.closest('.slot') || tgt0).scrollIntoView({ block: 'start' }); }); }
+
+  // the page the reader is actually looking at (the one under a line 35% down the screen)
+  function pageInView() {
+    // on phones several short pages share the screen, so look half a page down rather than 35% of the screen
+    var ph = (slots[1] || slots[0]).getBoundingClientRect().height;
+    var y = Math.min(window.innerHeight * 0.35, ph * 0.5), best = pages[0];
+    pages.forEach(function (p) { var r = p.parentNode.getBoundingClientRect(); if (r.top <= y && r.bottom > y) best = p; });
+    return best;
+  }
+
   // in-page links (#id): scroll ourselves, so they also work where the host blocks hash navigation
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('a[href^="#"]'); if (!a || a.id === 'ui-toc') return;  // the menu button opens the drawer
-    var t = document.getElementById(a.getAttribute('href').slice(1)); if (!t) return;
+    var href = a.getAttribute('href');
+    if (a.id === 'ui-lang') {  // switch language: same page in the other language
+      var cur = pageInView(), en = !!cur.closest('.lang-en'), twinId = (en ? 'ar-' : 'en-') + cur.dataset.pid;
+      href = '#' + (document.getElementById(twinId) ? twinId : (en ? 'ar-cover' : 'en-cover'));
+    }
+    var t = document.getElementById(href.slice(1)); if (!t) return;
     e.preventDefault();
     var dw = document.getElementById('drawer'); if (dw) dw.className = '';
     var intro = document.getElementById('intro'); if (intro) intro.classList.add('done');
